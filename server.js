@@ -83,25 +83,26 @@ function pageHtml(lead, t) {
 </div>
 <div class="nav"><div class="inner"><button id="prev">◀</button><button id="next" disabled>Suivant ▶</button></div></div>
 
-<div id="rec" style="display:none;position:fixed;inset:0;background:#000;z-index:9999;flex-direction:column">
- <video id="recVid" autoplay playsinline muted style="flex:1;width:100%;object-fit:contain;background:#000"></video>
- <div id="recInfo" style="text-align:center;color:#fff;background:#111;padding:8px;font-weight:700">Prêt — appuie sur Démarrer</div>
- <div style="display:flex;gap:8px;padding:12px;background:#111">
-  <button type="button" id="recCancel" style="flex:1;padding:15px;border:none;border-radius:10px;background:#333;color:#fff;font-weight:700;font-size:15px">Annuler</button>
-  <button type="button" id="recToggle" style="flex:2;padding:15px;border:none;border-radius:10px;background:#e11d2a;color:#fff;font-weight:800;font-size:15px">● Démarrer</button>
+<div id="rec" style="display:none;position:fixed;inset:0;background:#000;z-index:9999">
+ <video id="recVid" autoplay playsinline muted style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000"></video>
+ <div id="recInfo" style="position:absolute;top:0;left:0;right:0;text-align:center;color:#fff;background:rgba(0,0,0,.65);padding:10px;font-weight:700;z-index:2">Prêt — appuie sur Démarrer</div>
+ <div style="position:absolute;left:0;right:0;bottom:0;display:flex;gap:8px;padding:16px 14px calc(16px + env(safe-area-inset-bottom));background:linear-gradient(transparent,rgba(0,0,0,.9) 35%);z-index:2">
+  <button type="button" id="recCancel" style="flex:1;padding:16px;border:none;border-radius:12px;background:#444;color:#fff;font-weight:700;font-size:16px">Annuler</button>
+  <button type="button" id="recToggle" style="flex:2;padding:16px;border:none;border-radius:12px;background:#e11d2a;color:#fff;font-weight:800;font-size:16px">● Démarrer</button>
  </div>
 </div>
-<div id="scan" style="display:none;position:fixed;inset:0;background:#000;z-index:9999;flex-direction:column">
- <video id="scanVid" autoplay playsinline muted style="flex:1;width:100%;object-fit:contain;background:#000"></video>
- <div id="scanThumbs" style="display:flex;gap:6px;overflow-x:auto;padding:6px 8px;background:#111"></div>
- <div style="display:flex;gap:8px;padding:12px;background:#111">
-  <button type="button" id="scanCancel" style="flex:1;padding:15px;border:none;border-radius:10px;background:#333;color:#fff;font-weight:700;font-size:15px">Annuler</button>
-  <button type="button" id="scanCap" style="flex:2;padding:15px;border:none;border-radius:10px;background:#ff7a1a;color:#fff;font-weight:800;font-size:15px">📸 Capturer</button>
-  <button type="button" id="scanDone" style="flex:1.4;padding:15px;border:none;border-radius:10px;background:#0f8a51;color:#fff;font-weight:800;font-size:15px">✅ Terminer</button>
+<div id="scan" style="display:none;position:fixed;inset:0;background:#000;z-index:9999">
+ <video id="scanVid" autoplay playsinline muted style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000"></video>
+ <div id="scanThumbs" style="position:absolute;left:0;right:0;bottom:92px;display:flex;gap:6px;overflow-x:auto;padding:6px 8px;background:rgba(0,0,0,.55);z-index:2"></div>
+ <div style="position:absolute;left:0;right:0;bottom:0;display:flex;gap:8px;padding:16px 14px calc(16px + env(safe-area-inset-bottom));background:linear-gradient(transparent,rgba(0,0,0,.9) 35%);z-index:2">
+  <button type="button" id="scanCancel" style="flex:1;padding:16px;border:none;border-radius:12px;background:#444;color:#fff;font-weight:700;font-size:15px">Annuler</button>
+  <button type="button" id="scanCap" style="flex:2;padding:16px;border:none;border-radius:12px;background:#ff7a1a;color:#fff;font-weight:800;font-size:15px">📸 Capturer</button>
+  <button type="button" id="scanDone" style="flex:1.4;padding:16px;border:none;border-radius:12px;background:#0f8a51;color:#fff;font-weight:800;font-size:15px">✅ Terminer</button>
  </div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <input type="file" accept="image/*" capture="environment" id="capin">
+<input type="file" accept="video/*" capture="environment" id="vidin">
 <input type="file" accept="application/pdf,.pdf" id="pdfin">
 <script>
  var LEAD=${JSON.stringify(L)}, T=${JSON.stringify(String(t || ''))}, MAXB=${MAX_BYTES};
@@ -127,7 +128,7 @@ function pageHtml(lead, t) {
  var picked={}, cur=0;
  var card=document.getElementById('card'), pg=document.getElementById('pg'), stmsg=document.getElementById('stmsg');
  var prev=document.getElementById('prev'), next=document.getElementById('next');
- var capin=document.getElementById('capin'), pdfin=document.getElementById('pdfin');
+ var capin=document.getElementById('capin'), pdfin=document.getElementById('pdfin'), vidin=document.getElementById('vidin');
 
  function extOf(f){ var n=(f.name||''); var d=n.lastIndexOf('.'); if(d>0) return n.slice(d); if((f.type||'').indexOf('mp4')>=0) return '.mp4'; if((f.type||'').indexOf('webm')>=0) return '.webm'; if((f.type||'').indexOf('png')>=0) return '.png'; if((f.type||'').indexOf('pdf')>=0) return '.pdf'; return '.jpg'; }
  function storeStep(f){
@@ -164,6 +165,7 @@ function pageHtml(lead, t) {
   stmsg.textContent='';
  }
  capin.onchange=function(e){ if(e.target.files[0]) storeStep(e.target.files[0]); e.target.value=''; };
+ vidin.onchange=function(e){ if(e.target.files[0]) storeStep(e.target.files[0]); e.target.value=''; };
  pdfin.onchange=function(e){ if(e.target.files[0]) storeStep(e.target.files[0]); e.target.value=''; };
  prev.onclick=function(){ if(cur>0){cur--;render();} };
  next.onclick=function(){ if(cur<STEPS.length-1){ cur++; render(); } else sendAll(); };
@@ -174,9 +176,9 @@ function pageHtml(lead, t) {
  function recMime(){var o=['video/mp4;codecs=h264','video/mp4','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];for(var i=0;i<o.length;i++){try{if(window.MediaRecorder&&MediaRecorder.isTypeSupported(o[i]))return o[i];}catch(e){}}return '';}
  function stopRecCam(){ if(recTimer){clearInterval(recTimer);recTimer=null;} if(recStream){recStream.getTracks().forEach(function(t){t.stop();});recStream=null;} recEl.style.display='none'; mr=null; }
  function openRec(){
-  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||!window.MediaRecorder){stmsg.className='status err';stmsg.textContent='Filmer non supporté sur ce navigateur.';return;}
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||!window.MediaRecorder){ vidin.click(); return; }
   chunks=[];recInfo.textContent='Prêt — appuie sur Démarrer';recToggle.textContent='● Démarrer';recToggle.style.background='#e11d2a';
-  navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:true}).then(function(s){recStream=s;recVid.srcObject=s;recEl.style.display='flex';}).catch(function(){stmsg.className='status err';stmsg.textContent='Caméra refusée.';});
+  navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:true}).then(function(s){recStream=s;recVid.srcObject=s;recEl.style.display='block';}).catch(function(){ vidin.click(); });
  }
  document.getElementById('recCancel').onclick=function(){ if(mr&&mr.state&&mr.state!=='inactive'){try{mr.stop();}catch(e){}} chunks=[]; stopRecCam(); };
  recToggle.onclick=function(){
@@ -204,7 +206,7 @@ function pageHtml(lead, t) {
  function openScan(){
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){stmsg.className='status err';stmsg.textContent='Scanner non supporté — importe un PDF.';return;}
   scanImgs=[];scanThumbs.innerHTML='';
-  navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false}).then(function(s){sStream=s;scanVid.srcObject=s;scanEl.style.display='flex';}).catch(function(){stmsg.className='status err';stmsg.textContent='Caméra refusée — importe un PDF.';});
+  navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false}).then(function(s){sStream=s;scanVid.srcObject=s;scanEl.style.display='block';}).catch(function(){stmsg.className='status err';stmsg.textContent='Caméra refusée — importe le mandat en PDF.';});
  }
  document.getElementById('scanCancel').onclick=stopScan;
  document.getElementById('scanCap').onclick=function(){
