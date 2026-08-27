@@ -29,8 +29,14 @@ const STORE = path.join(os.tmpdir(), 'auto1bridge');
 try { fs.mkdirSync(STORE, { recursive: true }); } catch (e) {}
 
 const app = express();
+app.set('trust proxy', true); // Render/Proxy : req.protocol renvoie https
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
+
+function baseUrl(req) {
+  var proto = (req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0];
+  return proto + '://' + req.get('host');
+}
 
 // ---- Jetons ----
 function tokenFor(lead) {
@@ -184,12 +190,44 @@ app.post('/done', (req, res) => {
 });
 
 // ---- Générateur de lien marchand ----
+// JSON si &format=json, sinon une jolie page avec le lien + bouton Copier.
 app.get('/link', (req, res) => {
-  if (ADMIN_KEY && req.query.key !== ADMIN_KEY) return res.status(403).json({ error: 'clé admin invalide' });
+  if (ADMIN_KEY && req.query.key !== ADMIN_KEY) return res.status(403).send('Clé admin invalide.');
   const lead = cleanLead(req.query.lead);
-  if (!lead) return res.status(400).json({ error: 'lead manquant' });
-  const base = req.protocol + '://' + req.get('host');
-  res.json({ lead, url: base + '/u?lead=' + lead + '&t=' + tokenFor(lead) });
+  const key = req.query.key || '';
+  const base = baseUrl(req);
+  if (!lead) {
+    // pas de lead -> mini formulaire pour en saisir un
+    return res.set('Content-Type', 'text/html; charset=utf-8').send(`<!doctype html><html lang="fr"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Auto1 — Générer un lien</title>
+<style>body{font:16px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;background:#f4f6fa;color:#1b2432;margin:0}
+.w{max-width:520px;margin:40px auto;padding:0 16px}.c{background:#fff;border:1px solid #e3e8f0;border-radius:16px;padding:24px}
+h1{font-size:20px;margin:0 0 14px}input{width:100%;padding:13px;border:1px solid #d3dae6;border-radius:10px;font-size:16px;text-transform:uppercase}
+button{width:100%;margin-top:12px;padding:14px;background:#ff7a1a;color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:800;cursor:pointer}</style></head>
+<body><div class="w"><div class="c"><h1>Générer un lien marchand</h1>
+<form method="get" action="/link"><input name="lead" placeholder="Lead (ex : UN04099)" autofocus autocapitalize="characters">
+<input type="hidden" name="key" value="${key.replace(/"/g,'')}"><button>Générer le lien</button></form></div></div></body></html>`);
+  }
+  const url = base + '/u?lead=' + lead + '&t=' + tokenFor(lead);
+  if (req.query.format === 'json') return res.json({ lead, url });
+  res.set('Content-Type', 'text/html; charset=utf-8').send(`<!doctype html><html lang="fr"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Lien ${lead}</title>
+<style>body{font:16px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;background:#f4f6fa;color:#1b2432;margin:0}
+.w{max-width:620px;margin:40px auto;padding:0 16px}.c{background:#fff;border:1px solid #e3e8f0;border-radius:16px;padding:24px}
+h1{font-size:19px;margin:0 0 4px}.lead{display:inline-block;background:#fff3e8;color:#b45700;border:1px solid #ffd8b0;border-radius:8px;padding:2px 10px;font-weight:800;margin-bottom:14px}
+.link{display:block;background:#f5f7fb;border:1px solid #e2e7f0;border-radius:10px;padding:14px;word-break:break-all;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px}
+button{margin-top:12px;padding:14px 18px;background:#ff7a1a;color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:800;cursor:pointer}
+a.open{display:inline-block;margin-top:12px;margin-left:8px;padding:14px 18px;background:#eef4ff;border:1px solid #2f7bff;color:#1c5fd0;border-radius:10px;font-weight:700;text-decoration:none}
+.ok{color:#0f8a51;font-weight:700;margin-top:10px;min-height:20px}.n{color:#5b6676;font-size:14px;margin-top:14px}</style></head>
+<body><div class="w"><div class="c">
+<h1>Lien pour le marchand</h1><span class="lead">Dossier ${lead}</span>
+<span class="link" id="lk">${url}</span>
+<button onclick="navigator.clipboard.writeText(document.getElementById('lk').textContent).then(function(){document.getElementById('m').textContent='✅ Lien copié — colle-le dans ton mail.';})">📋 Copier le lien</button>
+<a class="open" href="${url}" target="_blank">Ouvrir</a>
+<div class="ok" id="m"></div>
+<div class="n">Colle ce lien dans ton mail de procédure. Le marchand l'ouvre, ajoute ses photos, appuie sur Envoyer → elles arrivent dans le Drive, dossier ${lead}.</div>
+<div class="n"><a href="/link?key=${key.replace(/"/g,'')}">← générer un autre lien</a></div>
+</div></div></body></html>`);
 });
 
 const port = process.env.PORT || 3000;
