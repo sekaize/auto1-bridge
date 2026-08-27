@@ -16,7 +16,7 @@ const os = require('os');
 const path = require('path');
 
 const { LINK_SECRET, PULL_KEY, ADMIN_KEY, MAX_MB } = process.env;
-const MAX_BYTES = (parseInt(MAX_MB || '40', 10)) * 1024 * 1024;
+const MAX_BYTES = (parseInt(MAX_MB || '45', 10)) * 1024 * 1024;
 
 const STORE = path.join(os.tmpdir(), 'auto1bridge');
 try { fs.mkdirSync(STORE, { recursive: true }); } catch (e) {}
@@ -122,7 +122,7 @@ function pageHtml(lead, t) {
   {t:"Photo du coffre",h:"Coffre ouvert et vide",type:"photo",name:"13_coffre"},
   {t:"Photo du tableau de bord entier",h:"Depuis la banquette arrière",type:"photo",name:"14_tableau_bord"},
   {t:"Photo du compteur (moteur démarré)",h:"Moteur démarré, compteur bien lisible",type:"photo",name:"15_compteur"},
-  {t:"Vidéo du moteur tournant",h:"Capot ouvert, moteur démarré, 10 à 20 s",type:"video",name:"16_video_moteur"},
+  {t:"Vidéo du moteur tournant",h:"Capot ouvert, moteur démarré — 10 à 15 s suffisent",type:"video",name:"16_video_moteur"},
   {t:"Mandat signé et tamponné",h:"Scannez-le en PDF (ou importez le PDF)",type:"mandat",name:"Mandat"}
  ];
  var picked={}, cur=0;
@@ -132,17 +132,17 @@ function pageHtml(lead, t) {
 
  function extOf(f){ var n=(f.name||''); var d=n.lastIndexOf('.'); if(d>0) return n.slice(d); if((f.type||'').indexOf('mp4')>=0) return '.mp4'; if((f.type||'').indexOf('webm')>=0) return '.webm'; if((f.type||'').indexOf('png')>=0) return '.png'; if((f.type||'').indexOf('pdf')>=0) return '.pdf'; return '.jpg'; }
  function storeStep(f){
-  if(f.size>MAXB){ stmsg.className='status err'; stmsg.textContent='Fichier trop lourd ('+(f.size/1048576).toFixed(0)+' Mo).'; return; }
+  if(f.size>MAXB){ stmsg.className='status err'; stmsg.textContent='Fichier trop lourd ('+(f.size/1048576).toFixed(0)+' Mo, max '+(MAXB/1048576).toFixed(0)+' Mo). '+(STEPS[cur].type==='video'?'Filme plus court, ou touche « filmer dans la page ».':'Réessaie.'); return; }
   var s=STEPS[cur];
   var fname = s.name + (s.type==='mandat' ? ('_'+LEAD+'.pdf') : (s.type==='photo' ? '.jpg' : extOf(f)));
   picked[cur]=new File([f], fname, {type:f.type||'application/octet-stream'});
   stmsg.className='status ok'; stmsg.textContent='✓ Enregistré';
   render();
  }
- function previewHtml(i){ var f=picked[i]; var u=URL.createObjectURL(f);
-  if((f.type||'').indexOf('video')===0) return '<video src="'+u+'" muted playsinline></video>';
+ function previewHtml(i){ var f=picked[i];
+  if((f.type||'').indexOf('video')===0) return '<div style="color:#0f8a51;font-weight:800;padding:12px;text-align:center">🎥 Vidéo ajoutée ✓<br><span style="font-weight:600;color:#5b6676;font-size:13px">'+(f.size/1048576).toFixed(1)+' Mo</span></div>';
   if((f.type||'').indexOf('pdf')>=0) return '<div style="color:#0f8a51;font-weight:800;padding:12px">📄 Mandat PDF ajouté ✓</div>';
-  return '<img src="'+u+'">'; }
+  return '<img src="'+URL.createObjectURL(f)+'">'; }
  function placeholder(s){ return s.type==='video'?'🎥<br>Appuyez sur « Filmer »':(s.type==='mandat'?'📄<br>Scannez le mandat en PDF':'📷<br>Appuyez sur « Prendre la photo »'); }
 
  function render(){
@@ -151,14 +151,15 @@ function pageHtml(lead, t) {
   var shot = picked[cur]?previewHtml(cur):placeholder(s);
   var btn='';
   if(s.type==='photo') btn='<button class="big" id="cap">📷 '+(picked[cur]?'Reprendre la photo':'Prendre la photo')+'</button>';
-  else if(s.type==='video') btn='<button class="big" id="cap">🎥 '+(picked[cur]?'Refilmer':'Filmer (10-20s)')+'</button>';
+  else if(s.type==='video') btn='<button class="big" id="cap">🎥 '+(picked[cur]?'Refaire la vidéo':'Filmer le moteur')+'</button><button class="ghost" id="rec2">…ou filmer dans la page (fichier plus léger)</button>';
   else btn='<button class="big" id="cap">📄 '+(picked[cur]?'Re-scanner':'Scanner le mandat')+'</button><button class="ghost" id="imp">…ou importer le mandat en PDF</button>';
   card.innerHTML='<div class="step">Étape '+(cur+1)+' / '+STEPS.length+'</div><h1>'+s.t+'</h1><p class="hint">'+s.h+'</p><div class="shot">'+shot+'</div>'+btn;
   var cap=document.getElementById('cap');
   if(s.type==='photo') cap.onclick=function(){ capin.click(); };
-  else if(s.type==='video') cap.onclick=openRec;
+  else if(s.type==='video') cap.onclick=function(){ vidin.click(); };
   else cap.onclick=openScan;
   var imp=document.getElementById('imp'); if(imp) imp.onclick=function(){ pdfin.click(); };
+  var rec2=document.getElementById('rec2'); if(rec2) rec2.onclick=openRec;
   prev.style.visibility=cur===0?'hidden':'visible';
   next.disabled=!picked[cur];
   next.textContent = cur===STEPS.length-1 ? '✅ Tout envoyer' : 'Suivant ▶';
@@ -188,12 +189,14 @@ function pageHtml(lead, t) {
    chunks=[];
    mr.ondataavailable=function(e){ if(e.data&&e.data.size)chunks.push(e.data); };
    mr.onstop=function(){
-    var type=(mr&&mr.mimeType)||mime||'video/webm';
+    var type=(mr&&mr.mimeType)||mime||'video/mp4';
     var blob=new Blob(chunks,{type:type});
-    if(blob.size>MAXB){ stmsg.className='status err'; stmsg.textContent='Vidéo trop lourde ('+(blob.size/1048576).toFixed(0)+' Mo). Filme plus court.'; stopRecCam(); return; }
-    stopRecCam(); storeStep(blob);
+    stopRecCam();
+    if(!blob.size){ stmsg.className='status err'; stmsg.textContent="Enregistrement vide sur ce téléphone — on ouvre la caméra."; vidin.click(); return; }
+    if(blob.size>MAXB){ stmsg.className='status err'; stmsg.textContent='Vidéo trop lourde ('+(blob.size/1048576).toFixed(0)+' Mo). Filme plus court.'; return; }
+    storeStep(blob);
    };
-   try{ mr.start(); }catch(e){ stmsg.className='status err';stmsg.textContent='Démarrage impossible.';stopRecCam();return; }
+   try{ mr.start(1000); }catch(e){ try{ mr.start(); }catch(e2){ stmsg.className='status err';stmsg.textContent='Démarrage impossible.';stopRecCam();return; } }
    recT0=Date.now(); recToggle.textContent='■ Arrêter'; recToggle.style.background='#333';
    recTimer=setInterval(function(){ var sec=Math.floor((Date.now()-recT0)/1000); recInfo.textContent='● Enregistrement… '+sec+'s / '+MAXSEC+'s max'; if(sec>=MAXSEC){try{mr.stop();}catch(e){}} },250);
   } else { try{mr.stop();}catch(e){} }
